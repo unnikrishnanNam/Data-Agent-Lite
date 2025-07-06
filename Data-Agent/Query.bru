@@ -1,0 +1,18 @@
+meta {
+  name: Query
+  type: http
+  seq: 1
+}
+
+post {
+  url: http://localhost:8000/ask
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "question": "Which products do you think sold better, so that I can increase my marketing budget efficiently. Also go through their categories to find out the trends and help me build out an efficient strategy"
+  }
+  
+}
