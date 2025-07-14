@@ -1,0 +1,85 @@
+-- This is a sample query used to populate the table for testing purposes only.
+
+-- Customers
+CREATE TABLE customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    email VARCHAR(100),
+    created_at DATE
+);
+
+-- Products
+CREATE TABLE products (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100),
+    price NUMERIC(10, 2),
+    category VARCHAR(50)
+);
+
+-- Orders
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES customers(id),
+    order_date DATE,
+    total_amount NUMERIC(10, 2)
+);
+
+-- Order Items (Many-to-Many: Order ↔ Product)
+CREATE TABLE order_items (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER REFERENCES orders(id),
+    product_id INTEGER REFERENCES products(id),
+    quantity INTEGER,
+    price NUMERIC(10, 2)  -- snapshot of product price at time of order
+);
+
+-- Insert customers
+INSERT INTO customers (name, email, created_at)
+SELECT
+  'Customer ' || i,
+  'customer' || i || '@example.com',
+  CURRENT_DATE - (random() * 100)::int
+FROM generate_series(1, 100) AS s(i);
+
+-- Insert products
+INSERT INTO products (name, price, category)
+SELECT
+  'Product ' || i,
+  (random() * 500 + 50)::numeric(10, 2),
+  CASE WHEN i % 3 = 0 THEN 'Electronics'
+       WHEN i % 3 = 1 THEN 'Apparel'
+       ELSE 'Home' END
+FROM generate_series(1, 30) AS s(i);
+
+-- Insert orders (60 days * 15-20 orders/day ≈ 1000)
+DO $$
+DECLARE
+    i INT;
+    cust_id INT;
+    prod_id INT;
+    order_id INT;
+    qty INT;
+    price NUMERIC;
+    date DATE;
+BEGIN
+  FOR i IN 1..1000 LOOP
+    cust_id := (SELECT id FROM customers ORDER BY random() LIMIT 1);
+    date := CURRENT_DATE - (random() * 60)::int;
+    INSERT INTO orders (customer_id, order_date, total_amount)
+    VALUES (cust_id, date, 0)
+    RETURNING id INTO order_id;
+
+    -- Add 1 to 5 items per order
+    FOR j IN 1..(1 + random()*4)::int LOOP
+      prod_id := (SELECT id FROM products ORDER BY random() LIMIT 1);
+      qty := (1 + random()*3)::int;
+      price := (SELECT p.price FROM products p WHERE p.id = prod_id);
+      INSERT INTO order_items (order_id, product_id, quantity, price)
+      VALUES (order_id, prod_id, qty, price);
+
+      -- Update order total
+      UPDATE orders SET total_amount = total_amount + (qty * price)
+      WHERE id = order_id;
+    END LOOP;
+  END LOOP;
+END $$;
